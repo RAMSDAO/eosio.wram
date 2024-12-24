@@ -12,6 +12,7 @@ namespace eosio {
     */
    class [[eosio::contract("eosio.wram")]] wram : public contract {
       const symbol RAM_SYMBOL = symbol("WRAM", 0);
+      const name RAM_BANK = "ramdeposit12"_n;
 
       public:
          using contract::contract;
@@ -232,8 +233,6 @@ namespace eosio {
 
          void unwrap_ram( const name to, const asset quantity );
          void wrap_ram( const name to, const int64_t bytes );
-         void mirror_system_ram();
-         eosiosystem::system_contract::eosio_global_state get_global();
          void check_disable_transfer( const name receiver );
 
          void sub_balance( const name& owner, const asset& value );
