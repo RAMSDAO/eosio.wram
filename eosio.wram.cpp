@@ -2,12 +2,18 @@
 #include "src/token.cpp"
 #include "src/mirror.cpp"
 #include "src/egress.cpp"
+#include "src/config.cpp"
 
 namespace eosio {
 
 [[eosio::action]]
 void wram::unwrap( const name owner, const int64_t bytes )
 {
+   // check status
+   config_table _config(get_self(), get_self().value);
+   config_row config = _config.get_or_default();
+   check(config.unwrap_ram_enabled, "unwrap ram is currently disabled");
+
    transfer(owner, get_self(), asset{bytes, RAM_SYMBOL}, "unwrap ram");
 }
 
@@ -26,6 +32,11 @@ void wram::unwrap_ram( const name to, const asset quantity )
 
 void wram::wrap_ram( const name to, const int64_t bytes )
 {
+   // check status
+   config_table _config(get_self(), get_self().value);
+   config_row config = _config.get_or_default();
+   check(config.wrap_ram_enabled, "wrap ram is currently disabled");
+
    // update WRAM supply to reflect system RAM
    mirror_system_ram();
 

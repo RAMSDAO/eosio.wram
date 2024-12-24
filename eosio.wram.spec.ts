@@ -22,6 +22,15 @@ const contracts = {
     },
 }
 
+interface Config {
+    wrap_ram_enabled: boolean
+    unwrap_ram_enabled: boolean
+}
+
+function getConfig(): Config {
+    return contracts.wram.tables.config().getTableRows()[0]
+}
+
 function getTokenBalance(account: string, symcode: string) {
     const scope = Name.from(account).value.value
     const primary_key = Asset.SymbolCode.from(symcode).value.value
@@ -62,6 +71,7 @@ function getEgressList(account: string) {
 describe(wram_contract, () => {
     test('eosio::init', async () => {
         await contracts.system.actions.init([]).send()
+        await contracts.wram.actions.cfg([true, true]).send()
     })
 
     test('eosio.token::issue::EOS', async () => {
@@ -359,5 +369,54 @@ describe(wram_contract, () => {
 
         const action_retire = contracts.wram.actions.retire([`10000 ${RAM_SYMBOL}`, '']).send(wram_contract)
         await expectToThrow(action_retire, 'eosio_assert: must be executed by contract')
+    })
+
+    test('wrapram:disabled', async () => {
+        await contracts.wram.actions.cfg([false, true]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: false,
+            unwrap_ram_enabled: true,
+        })
+
+        await expectToThrow(
+            contracts.system.actions.buyrambytes([alice, wram_contract, 5000]).send(),
+            'eosio_assert: wrap ram is currently disabled'
+        )
+
+        await expectToThrow(
+            contracts.system.actions.ramtransfer([alice, wram_contract, 5000, '']).send(),
+            'eosio_assert: wrap ram is currently disabled'
+        )
+    })
+
+    test('wrapram:enabled', async () => {
+        await contracts.wram.actions.cfg([true, true]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: true,
+            unwrap_ram_enabled: true,
+        })
+    })
+
+    test('unwrapram:disabled', async () => {
+        await contracts.system.actions.ramtransfer([alice, wram_contract, 5000, '']).send()
+
+        await contracts.wram.actions.cfg([true, false]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: true,
+            unwrap_ram_enabled: false,
+        })
+
+        await expectToThrow(
+            contracts.wram.actions.unwrap([alice, 500]).send(alice),
+            'eosio_assert: unwrap ram is currently disabled'
+        )
+    })
+
+    test('unwrapram:enabled', async () => {
+        await contracts.wram.actions.cfg([true, true]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: true,
+            unwrap_ram_enabled: true,
+        })
     })
 })

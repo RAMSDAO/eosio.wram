@@ -17,6 +17,31 @@ namespace eosio {
          using contract::contract;
 
          /**
+          * ## TABLE `config`
+          *
+          * > configuration settings for the contract, specifically related to RAM management operations
+          *
+          * ### params
+          *
+          * - `{bool} wrap_ram_enabled` - whether wrapping RAM is enabled
+          * - `{bool} unwrap_ram_enabled` - whether unwrapping RAM is enabled
+          *
+          * ### example
+          *
+          * ```json
+          * {
+          *     "wrap_ram_enabled": false,
+          *     "unwrap_ram_enabled": false
+          * }
+          * ```
+          */
+         struct [[eosio::table("config")]] config_row {
+            bool     wrap_ram_enabled = true;
+            bool     unwrap_ram_enabled = false;
+         };
+         typedef eosio::singleton<"config"_n, config_row> config_table;
+
+         /**
           * ## TABLE `egresslist`
           *
           * > block transfers to any account in the egress list
@@ -39,6 +64,15 @@ namespace eosio {
             uint64_t primary_key()const { return account.value; }
          };
          typedef eosio::multi_index< "egresslist"_n, egresslist_row > egresslist;
+
+         /**
+         * Update the configuration settings for RAM management.
+         *
+         * @param wrap_ram_enabled  Enable or disable wrap ram
+         * @param unwrap_ram_enabled  Enable or disable unwrap ram
+         */
+         [[eosio::action]]
+         void cfg( const bool wrap_ram_enabled, const bool unwrap_ram_enabled );
 
          /**
           * Add accounts to the egress list.
