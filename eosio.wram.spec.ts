@@ -409,7 +409,7 @@ describe(wram_contract, () => {
         )
     })
 
-    test('wrapram::disabled', async () => {
+    test('wrapram::disabled - only limited to converting from ram to wram', async () => {
         await contracts.wram.actions.cfg([false, true]).send()
         expect(getConfig()).toEqual({
             wrap_ram_enabled: false,
@@ -417,14 +417,12 @@ describe(wram_contract, () => {
         })
 
         await expectToThrow(
-            contracts.system.actions.buyrambytes([alice, wram_contract, 5000]).send(),
+            contracts.system.actions.ramtransfer([alice, wram_contract, 1000, '']).send(),
             'eosio_assert: wrap ram is currently disabled'
         )
 
-        await expectToThrow(
-            contracts.system.actions.ramtransfer([alice, wram_contract, 5000, '']).send(),
-            'eosio_assert: wrap ram is currently disabled'
-        )
+        await contracts.system.actions.buyrambytes([alice, wram_contract, 1000]).send()
+        await contracts.wram.actions.unwrap([alice, 1000]).send(alice)
     })
 
     test('wrapram::enabled', async () => {

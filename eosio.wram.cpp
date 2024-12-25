@@ -34,11 +34,6 @@ void wram::wrap_ram( const name to, const int64_t bytes )
 {
    check(bytes > 0, "must transfer positive quantity");
 
-   // check status
-   config_table _config(get_self(), get_self().value);
-   config_row config = _config.get_or_default();
-   check(config.wrap_ram_enabled, "wrap ram is currently disabled");
-
    // cannot have contract itself mint WRAM
    check(to != get_self(), "cannot wrap ram to self" );
 
@@ -72,6 +67,12 @@ void wram::on_ramtransfer( const name from, const name to, const int64_t bytes, 
    // ignore transfers not sent to this contract
    if (to != get_self()) { return; }
    if (memo == "ignore") { return; } // allow for internal RAM transfers
+
+   // check status
+   config_table _config(get_self(), get_self().value);
+   config_row config = _config.get_or_default();
+   check(config.wrap_ram_enabled, "wrap ram is currently disabled");
+
    wrap_ram(from, bytes);
 }
 

@@ -24,7 +24,7 @@ namespace eosio {
           *
           * ### params
           *
-          * - `{bool} wrap_ram_enabled` - whether wrapping RAM is enabled
+          * - `{bool} wrap_ram_enabled` - whether wrapping RAM is enabled (Only limited to converting from ram to wram)
           * - `{bool} unwrap_ram_enabled` - whether unwrapping RAM is enabled
           *
           * ### example
