@@ -402,7 +402,14 @@ describe(wram_contract, () => {
         await expectToThrow(action_retire, 'eosio_assert: must be executed by contract')
     })
 
-    test('wrapram:disabled', async () => {
+    test('cfg::error', async () => {
+        await expectToThrow(
+            contracts.wram.actions.cfg([false, true]).send(bob),
+            'missing required authority eosio.wram'
+        )
+    })
+
+    test('wrapram::disabled', async () => {
         await contracts.wram.actions.cfg([false, true]).send()
         expect(getConfig()).toEqual({
             wrap_ram_enabled: false,
@@ -420,7 +427,7 @@ describe(wram_contract, () => {
         )
     })
 
-    test('wrapram:enabled', async () => {
+    test('wrapram::enabled', async () => {
         await contracts.wram.actions.cfg([true, true]).send()
         expect(getConfig()).toEqual({
             wrap_ram_enabled: true,
@@ -428,7 +435,7 @@ describe(wram_contract, () => {
         })
     })
 
-    test('unwrapram:disabled', async () => {
+    test('unwrapram::disabled', async () => {
         await contracts.system.actions.ramtransfer([alice, wram_contract, 5000, '']).send()
 
         await contracts.wram.actions.cfg([true, false]).send()
