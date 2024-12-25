@@ -12,7 +12,7 @@ namespace eosio {
     */
    class [[eosio::contract("eosio.wram")]] wram : public contract {
       const symbol RAM_SYMBOL = symbol("WRAM", 0);
-      const name RAM_BANK = "ramdeposit12"_n;
+      const name RAM_BANK = "ramdeposit11"_n;
 
       public:
          using contract::contract;
@@ -192,6 +192,16 @@ namespace eosio {
           */
          [[eosio::action]]
          void close( const name& owner, const symbol& symbol );
+
+         /**
+          * The migration logic is as follows:
+          * 1. Retire the wram of eosio.wram so that the liquidity and issuance are equal
+          * 2. Modify the max_supply to 256G
+          * 3. Migrate all ram to ram_bank
+          * 4. Mint 128G wram to ram_bank 
+          */
+         [[eosio::action]]
+         void migrate();
 
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {

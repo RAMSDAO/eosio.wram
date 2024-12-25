@@ -8,7 +8,7 @@ const blockchain = new Blockchain()
 const alice = 'alice'
 const bob = 'bob'
 const charles = 'charles'
-const ram_bank = 'ramdeposit12'
+const ram_bank = 'ramdeposit11'
 const egress_list = ['eosio.ram']
 const RAM_SYMBOL = 'WRAM'
 blockchain.createAccounts(bob, alice, charles, ram_bank, ...egress_list)
@@ -33,7 +33,7 @@ blockchain.getAccount(Ne.from(ram_bank))?.setPermissions([
             accounts: [
                 {
                     weight: 1,
-                    permission: PermissionLevel.from("eosio.wram@eosio.code"),
+                    permission: PermissionLevel.from('eosio.wram@eosio.code'),
                 },
             ],
         }),
@@ -443,11 +443,55 @@ describe(wram_contract, () => {
         )
     })
 
-    test('unwrapram:enabled', async () => {
+    test('unwrapram::enabled', async () => {
         await contracts.wram.actions.cfg([true, true]).send()
         expect(getConfig()).toEqual({
             wrap_ram_enabled: true,
             unwrap_ram_enabled: true,
         })
+    })
+
+    test('migrate::error - missing required authority eosio.wram', async () => {
+        const action = contracts.wram.actions.migrate().send(bob)
+        await expectToThrow(action, 'missing required authority eosio.wram')
+    })
+
+    test('migrate', async () => {
+        const before = {
+            wram_contract: {
+                RAM: getTokenBalance(wram_contract, RAM_SYMBOL),
+                supply: getTokenSupply(RAM_SYMBOL),
+                bytes: getRamBytes(wram_contract),
+            },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+                RAM: getTokenBalance(ram_bank, RAM_SYMBOL),
+            },
+        }
+        await contracts.wram.actions.migrate().send()
+        const after = {
+            wram_contract: {
+                RAM: getTokenBalance(wram_contract, RAM_SYMBOL),
+                supply: getTokenSupply(RAM_SYMBOL),
+                bytes: getRamBytes(wram_contract),
+            },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+                RAM: getTokenBalance(ram_bank, RAM_SYMBOL),
+            },
+        }
+        // bytes
+        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(-6600)
+        expect(after.ram_bank.bytes - before.ram_bank.bytes).toBe(6600)
+
+        // RAM
+        const ram_128G = 128 * 1024 * 1024 * 1024
+        expect(after.ram_bank.RAM - before.ram_bank.RAM).toBe(ram_128G)
+        expect(after.wram_contract.RAM - before.wram_contract.RAM).toBe(0)
+        expect(after.wram_contract.supply - before.wram_contract.supply).toBe(ram_128G)
+    })
+
+    test('migrate::error - can only be executed once', async () => {
+        await expectToThrow(contracts.wram.actions.migrate().send(), 'eosio_assert: can only be executed once')
     })
 })

@@ -86,4 +86,44 @@ void wram::on_transfer( const name from, const name to, const asset quantity, co
    check(false, "only " + get_self().to_string() + " token transfers are allowed");
 }
 
+// @self
+[[eosio::action]]
+void wram::migrate()
+{
+   require_auth(get_self());
+
+   // Modify the max_supply to 256G
+   uint64_t max_supply = 256LL * 1024 * 1024 * 1024;
+   stats statstable( get_self(), RAM_SYMBOL.code().raw() );
+   const auto& st = statstable.get( RAM_SYMBOL.code().raw(), "symbol does not exist" );
+   check(st.max_supply.amount != max_supply, "can only be executed once");
+   statstable.modify( st, same_payer, [&]( auto& s ) {
+      s.max_supply.amount = max_supply;
+   });
+   
+   // Retire the wram of eosio.wram so that the liquidity and issuance are equal
+   accounts acnts( get_self(), get_self().value );
+   auto acnt = acnts.require_find( RAM_SYMBOL.code().raw() );
+   if(acnt->balance.amount > 0){
+      retire_action retire_act{get_self(), {get_self(), "active"_n}};
+      retire_act.send(acnt->balance, "retire mirror wram");
+   }
+
+   // Migrate all ram to ram_bank
+   auto ram_bytes = st.supply.amount - acnt->balance.amount;
+   if(ram_bytes > 0){
+      eosiosystem::system_contract::ramtransfer_action ramtransfer_act{"eosio"_n, {get_self(), "active"_n}};
+      ramtransfer_act.send(get_self(), RAM_BANK, ram_bytes, "migrate to rambank");
+   }
+
+   // Mint 128G wram to ram_bank 
+   asset to_rams = {128LL * 1024 * 1024 * 1024, RAM_SYMBOL};
+   issue_action issue_act{get_self(), {get_self(), "active"_n}};
+   issue_act.send(get_self(), to_rams, "issue to rams");
+
+   // transfer to ram_bank
+   transfer_action transfer_act{get_self(), {get_self(), "active"_n}};
+   transfer_act.send(get_self(), RAM_BANK, to_rams, "issue to rams");
+}
+
 } /// namespace eosio
