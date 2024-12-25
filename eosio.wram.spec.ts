@@ -446,6 +446,12 @@ describe(wram_contract, () => {
             contracts.wram.actions.unwrap([alice, 500]).send(alice),
             'eosio_assert: unwrap ram is currently disabled'
         )
+
+        await expectToThrow(
+            contracts.wram.actions.transfer([alice, wram_contract, `500 ${RAM_SYMBOL}`, '']).send(alice),
+            'eosio_assert: unwrap ram is currently disabled'
+        )
+
     })
 
     test('unwrapram::enabled', async () => {

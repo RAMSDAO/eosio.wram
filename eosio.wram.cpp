@@ -8,11 +8,6 @@ namespace eosio {
 [[eosio::action]]
 void wram::unwrap( const name owner, const int64_t bytes )
 {
-   // check status
-   config_table _config(get_self(), get_self().value);
-   config_row config = _config.get_or_default();
-   check(config.unwrap_ram_enabled, "unwrap ram is currently disabled");
-
    transfer(owner, get_self(), asset{bytes, RAM_SYMBOL}, "unwrap ram");
 }
 
@@ -20,6 +15,11 @@ void wram::unwrap_ram( const name to, const asset quantity )
 {
    // validate incoming token transfer
    check(quantity.symbol == RAM_SYMBOL, "Only the system " + RAM_SYMBOL.code().to_string() + " token is accepted for transfers.");
+
+   // check status
+   config_table _config(get_self(), get_self().value);
+   config_row config = _config.get_or_default();
+   check(config.unwrap_ram_enabled, "unwrap ram is currently disabled");
 
    // retire wram
    retire_action retire_act{get_self(), {get_self(), "active"_n}};
