@@ -24,7 +24,7 @@ namespace eosio {
           *
           * ### params
           *
-          * - `{bool} wrap_ram_enabled` - whether wrapping RAM is enabled (Only limited to converting from ram to wram)
+          * - `{bool} wrap_ram_enabled` - whether wrapping RAM is enabled (Only limited to converting from ram to wram, not limiting eos to wram)
           * - `{bool} unwrap_ram_enabled` - whether unwrapping RAM is enabled
           *
           * ### example
@@ -67,9 +67,9 @@ namespace eosio {
          typedef eosio::multi_index< "egresslist"_n, egresslist_row > egresslist;
 
          /**
-         * Update the configuration settings for RAM management.
+         * Configure wrap/unwrap ram status.
          *
-         * @param wrap_ram_enabled  Enable or disable wrap ram
+         * @param wrap_ram_enabled  Enable or disable wrap ram(Only limited to converting from ram to wram, not limiting eos to wram)
          * @param unwrap_ram_enabled  Enable or disable unwrap ram
          */
          [[eosio::action]]
