@@ -1,4 +1,4 @@
-# Litepaper: 💾 EOS Wrapped RAM (`eosio.wram`) [![Bun Test](https://github.com/eosnetworkfoundation/eosio.wram/actions/workflows/test.yml/badge.svg)](https://github.com/eosnetworkfoundation/eosio.wram/actions/workflows/test.yml)
+# Litepaper: 💾 EOS Wrapped RAM (`eosio.wram`) [![Bun Test](https://github.com/ramsdao/eosio.wram/actions/workflows/test.yml/badge.svg)](https://github.com/ramsdao/eosio.wram/actions/workflows/test.yml)
 
 ## Overview
 
