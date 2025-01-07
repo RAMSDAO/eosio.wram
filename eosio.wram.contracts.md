@@ -120,3 +120,12 @@ title: Unwrap WRAM
 summary: 'Unwrap {{nowrap bytes}} bytes from {{nowrap owner}} account'
 icon: https://gateway.pinata.cloud/ipfs/QmZ4HSZDuSrZ4BHawtZRhVfwyYJ4DepNJqVDzxY59KveiM#3830f1ce8cb07f7757dbcf383b1ec1b11914ac34a1f9d8b065f07600fa9dac19
 ---
+
+<h1 class="contract">cfg</h1>
+
+---
+spec_version: "0.2.0"
+title: Configure wrap/unwrap ram status. 
+summary: 'Enable or Disable the Wrap/Unwrap ram action.(Wrap ram only limited to converting from ram to wram, not limiting eos to wram)'
+icon: https://gateway.pinata.cloud/ipfs/QmZ4HSZDuSrZ4BHawtZRhVfwyYJ4DepNJqVDzxY59KveiM#3830f1ce8cb07f7757dbcf383b1ec1b11914ac34a1f9d8b065f07600fa9dac19
+---

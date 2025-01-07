@@ -12,9 +12,35 @@ namespace eosio {
     */
    class [[eosio::contract("eosio.wram")]] wram : public contract {
       const symbol RAM_SYMBOL = symbol("WRAM", 0);
+      const name RAM_BANK = "ramdeposit11"_n;
 
       public:
          using contract::contract;
+
+         /**
+          * ## TABLE `config`
+          *
+          * > configuration settings for the contract, specifically related to RAM management operations
+          *
+          * ### params
+          *
+          * - `{bool} wrap_ram_enabled` - whether wrapping RAM is enabled (Only limited to converting from ram to wram, not limiting eos to wram)
+          * - `{bool} unwrap_ram_enabled` - whether unwrapping RAM is enabled
+          *
+          * ### example
+          *
+          * ```json
+          * {
+          *     "wrap_ram_enabled": false,
+          *     "unwrap_ram_enabled": false
+          * }
+          * ```
+          */
+         struct [[eosio::table("config")]] config_row {
+            bool     wrap_ram_enabled = true;
+            bool     unwrap_ram_enabled = false;
+         };
+         typedef eosio::singleton<"config"_n, config_row> config_table;
 
          /**
           * ## TABLE `egresslist`
@@ -39,6 +65,15 @@ namespace eosio {
             uint64_t primary_key()const { return account.value; }
          };
          typedef eosio::multi_index< "egresslist"_n, egresslist_row > egresslist;
+
+         /**
+         * Configure wrap/unwrap ram status.
+         *
+         * @param wrap_ram_enabled  Enable or disable wrap ram(Only limited to converting from ram to wram, not limiting eos to wram)
+         * @param unwrap_ram_enabled  Enable or disable unwrap ram
+         */
+         [[eosio::action]]
+         void cfg( const bool wrap_ram_enabled, const bool unwrap_ram_enabled );
 
          /**
           * Add accounts to the egress list.
@@ -158,6 +193,16 @@ namespace eosio {
          [[eosio::action]]
          void close( const name& owner, const symbol& symbol );
 
+         /**
+          * The migration logic is as follows:
+          * 1. Retire the wram of eosio.wram so that the liquidity and issuance are equal
+          * 2. Modify the max_supply to 256G
+          * 3. Migrate all ram to ram_bank
+          * 4. Mint 128G wram to ram_bank 
+          */
+         [[eosio::action]]
+         void migrate();
+
          static asset get_supply( const name& token_contract_account, const symbol_code& sym_code )
          {
             stats statstable( token_contract_account, sym_code.raw() );
@@ -198,8 +243,6 @@ namespace eosio {
 
          void unwrap_ram( const name to, const asset quantity );
          void wrap_ram( const name to, const int64_t bytes );
-         void mirror_system_ram();
-         eosiosystem::system_contract::eosio_global_state get_global();
          void check_disable_transfer( const name receiver );
 
          void sub_balance( const name& owner, const asset& value );

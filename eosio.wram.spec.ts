@@ -1,15 +1,17 @@
-import {Asset, Int64, Name} from '@wharfkit/antelope'
-import {Blockchain, expectToThrow} from '@eosnetwork/vert'
-import {describe, expect, test} from 'bun:test'
+import { Asset, Int64, Name } from '@wharfkit/antelope'
+import { AccountPermission, Blockchain, expectToThrow } from '@eosnetwork/vert'
+import { Name as Ne, Authority, PermissionLevel } from '@greymass/eosio'
+import { describe, expect, test } from 'bun:test'
 
 // Vert EOS VM
 const blockchain = new Blockchain()
 const alice = 'alice'
 const bob = 'bob'
 const charles = 'charles'
-const egress_list = ["eosio.ram"]
-const RAM_SYMBOL = "WRAM"
-blockchain.createAccounts(bob, alice, charles, ...egress_list)
+const ram_bank = 'ramdeposit11'
+const egress_list = ['eosio.ram']
+const RAM_SYMBOL = 'WRAM'
+blockchain.createAccounts(bob, alice, charles, ram_bank, ...egress_list)
 
 const wram_contract = 'eosio.wram'
 const contracts = {
@@ -22,46 +24,64 @@ const contracts = {
     },
 }
 
+blockchain.getAccount(Ne.from(ram_bank))?.setPermissions([
+    AccountPermission.from({
+        perm_name: Ne.from('active'),
+        parent: Ne.from('owner'),
+        required_auth: Authority.from({
+            threshold: 1,
+            accounts: [
+                {
+                    weight: 1,
+                    permission: PermissionLevel.from('eosio.wram@eosio.code'),
+                },
+            ],
+        }),
+    }),
+])
+
+interface Config {
+    wrap_ram_enabled: boolean
+    unwrap_ram_enabled: boolean
+}
+
+function getConfig(): Config {
+    return contracts.wram.tables.config().getTableRows()[0]
+}
+
 function getTokenBalance(account: string, symcode: string) {
     const scope = Name.from(account).value.value
     const primary_key = Asset.SymbolCode.from(symcode).value.value
-    const row = contracts.wram.tables
-        .accounts(scope)
-        .getTableRow(primary_key)
-    if (!row) return 0;
+    const row = contracts.wram.tables.accounts(scope).getTableRow(primary_key)
+    if (!row) return 0
     return Asset.from(row.balance).units.toNumber()
 }
 
 function getTokenSupply(symcode: string) {
     const scope = Asset.SymbolCode.from(symcode).value.value
-    const row = contracts.wram.tables
-        .stat(scope)
-        .getTableRow(scope)
-    if (!row) return 0;
+    const row = contracts.wram.tables.stat(scope).getTableRow(scope)
+    if (!row) return 0
     return Asset.from(row.supply).units.toNumber()
 }
 
 function getRamBytes(account: string) {
     const scope = Name.from(account).value.value
-    const row = contracts.system.tables
-        .userres(scope)
-        .getTableRow(scope)
+    const row = contracts.system.tables.userres(scope).getTableRow(scope)
     if (!row) return 0
     return Int64.from(row.ram_bytes).toNumber()
 }
 
 function getEgressList(account: string) {
     const primary_key = Name.from(account).value.value
-    const row = contracts.wram.tables
-        .egresslist(Name.from(wram_contract).value.value)
-        .getTableRow(primary_key)
-    if (!row) return ""
+    const row = contracts.wram.tables.egresslist(Name.from(wram_contract).value.value).getTableRow(primary_key)
+    if (!row) return ''
     return Name.from(row.account).toString()
 }
 
 describe(wram_contract, () => {
     test('eosio::init', async () => {
         await contracts.system.actions.init([]).send()
+        await contracts.wram.actions.cfg([true, true]).send()
     })
 
     test('eosio.token::issue::EOS', async () => {
@@ -79,16 +99,10 @@ describe(wram_contract, () => {
         await expectToThrow(action, 'eosio_assert: symbol must be WRAM')
     })
 
-    test('eosio.warm::create::error - invalid max supply', async () => {
-        const supply = `12345 ${RAM_SYMBOL}`
-        const action = contracts.wram.actions.create([wram_contract, supply]).send()
-        await expectToThrow(action, 'eosio_assert: maximum supply must match system max RAM size')
-    })
-
     test('eosio.wram::create::WRAM', async () => {
         const supply = `418945440768 ${RAM_SYMBOL}`
         await contracts.wram.actions.create([wram_contract, supply]).send()
-        expect(getTokenBalance(wram_contract, RAM_SYMBOL)).toBe(321908101425);
+        expect(getTokenBalance(wram_contract, RAM_SYMBOL)).toBe(0)
     })
 
     test('eosio::buyrambytes', async () => {
@@ -98,12 +112,12 @@ describe(wram_contract, () => {
         expect(after - before).toBe(10000)
     })
 
-    test('buyrambytes - mirror system RAM', async () => {
-        const before = getTokenSupply(RAM_SYMBOL);
+    test('wrapram buyrambytes', async () => {
+        const before = getTokenSupply(RAM_SYMBOL)
         await contracts.system.actions.buyrambytes([alice, wram_contract, 100]).send()
-        const after = getTokenSupply(RAM_SYMBOL);
-        expect(after - before).toBe(10100);
-    });
+        const after = getTokenSupply(RAM_SYMBOL)
+        expect(after - before).toBe(100)
+    })
 
     test('eosio::ramtransfer', async () => {
         const before = getRamBytes(bob)
@@ -114,13 +128,13 @@ describe(wram_contract, () => {
 
     test('fake::init', async () => {
         await contracts.fake.system.actions.init([]).send()
-    });
+    })
 
     test('fake::buyrambytes', async () => {
-        const before = getTokenBalance(wram_contract, RAM_SYMBOL);
+        const before = getTokenBalance(wram_contract, RAM_SYMBOL)
         await contracts.fake.system.actions.buyrambytes([alice, alice, 10000]).send()
-        const after = getTokenBalance(wram_contract, RAM_SYMBOL);
-        expect(after - before).toBe(0);
+        const after = getTokenBalance(wram_contract, RAM_SYMBOL)
+        expect(after - before).toBe(0)
     })
 
     test('fake.token::issue::WRAM', async () => {
@@ -141,6 +155,9 @@ describe(wram_contract, () => {
                 bytes: getRamBytes(alice),
                 RAM: getTokenBalance(alice, RAM_SYMBOL),
             },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+            },
         }
         await contracts.system.actions.ramtransfer([alice, wram_contract, 1000, '']).send(alice)
         const after = {
@@ -153,15 +170,19 @@ describe(wram_contract, () => {
                 bytes: getRamBytes(alice),
                 RAM: getTokenBalance(alice, RAM_SYMBOL),
             },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+            },
         }
         // bytes
         expect(after.alice.bytes - before.alice.bytes).toBe(-1000)
-        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(1000)
+        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(0)
+        expect(after.ram_bank.bytes - before.ram_bank.bytes).toBe(1000)
 
         // RAM
         expect(after.alice.RAM - before.alice.RAM).toBe(1000)
-        expect(after.wram_contract.RAM - before.wram_contract.RAM).toBe(-1000)
-        expect(after.wram_contract.supply - before.wram_contract.supply).toBe(0)
+        expect(after.wram_contract.RAM - before.wram_contract.RAM).toBe(0)
+        expect(after.wram_contract.supply - before.wram_contract.supply).toBe(1000)
     })
 
     test('on_notify::buyrambytes - wrap RAM bytes', async () => {
@@ -175,6 +196,9 @@ describe(wram_contract, () => {
                 bytes: getRamBytes(alice),
                 RAM: getTokenBalance(alice, RAM_SYMBOL),
             },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+            },
         }
         await contracts.system.actions.buyrambytes([alice, wram_contract, 2000]).send(alice)
         const after = {
@@ -187,10 +211,14 @@ describe(wram_contract, () => {
                 bytes: getRamBytes(alice),
                 RAM: getTokenBalance(alice, RAM_SYMBOL),
             },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+            },
         }
         // bytes
         expect(after.alice.bytes - before.alice.bytes).toBe(0)
-        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(2000)
+        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(0)
+        expect(after.ram_bank.bytes - before.ram_bank.bytes).toBe(2000)
 
         // RAM
         expect(after.alice.RAM - before.alice.RAM).toBe(2000)
@@ -209,6 +237,9 @@ describe(wram_contract, () => {
                 bytes: getRamBytes(alice),
                 RAM: getTokenBalance(alice, RAM_SYMBOL),
             },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+            },
         }
         await contracts.wram.actions.transfer([alice, wram_contract, `500 ${RAM_SYMBOL}`, '']).send(alice)
         const after = {
@@ -221,15 +252,19 @@ describe(wram_contract, () => {
                 bytes: getRamBytes(alice),
                 RAM: getTokenBalance(alice, RAM_SYMBOL),
             },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+            },
         }
         // bytes
         expect(after.alice.bytes - before.alice.bytes).toBe(500)
-        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(-500)
+        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(0)
+        expect(after.ram_bank.bytes - before.ram_bank.bytes).toBe(-500)
 
         // RAM
         expect(after.alice.RAM - before.alice.RAM).toBe(-500)
-        expect(after.wram_contract.RAM - before.wram_contract.RAM).toBe(500)
-        expect(after.wram_contract.supply - before.wram_contract.supply).toBe(0)
+        expect(after.wram_contract.RAM - before.wram_contract.RAM).toBe(0)
+        expect(after.wram_contract.supply - before.wram_contract.supply).toBe(-500)
     })
 
     test('transfer - WRAM to another account', async () => {
@@ -265,8 +300,8 @@ describe(wram_contract, () => {
     })
 
     test('transfer - ignore', async () => {
-        const before = getTokenBalance(alice, RAM_SYMBOL);
-        await contracts.system.actions.ramtransfer([alice, wram_contract, 1000, "ignore"]).send(alice)
+        const before = getTokenBalance(alice, RAM_SYMBOL)
+        await contracts.system.actions.ramtransfer([alice, wram_contract, 1000, 'ignore']).send(alice)
         const after = getTokenBalance(alice, RAM_SYMBOL)
         expect(after - before).toBe(0)
     })
@@ -287,13 +322,13 @@ describe(wram_contract, () => {
 
     test('egresslist - addegress', async () => {
         await contracts.wram.actions.addegress([egress_list]).send(wram_contract)
-        for ( const to of egress_list) {
+        for (const to of egress_list) {
             expect(getEgressList(to)).toBe(to)
         }
     })
 
     test('egresslist::transfer::error - cannot transfer to egress list', async () => {
-        for ( const to of egress_list) {
+        for (const to of egress_list) {
             const action = contracts.wram.actions.transfer([alice, to, `1000 ${RAM_SYMBOL}`, '']).send(alice)
             await expectToThrow(action, 'eosio_assert: transfer disabled to account')
         }
@@ -301,13 +336,15 @@ describe(wram_contract, () => {
 
     test('egresslist - removeegress', async () => {
         await contracts.wram.actions.removeegress([egress_list]).send(wram_contract)
-        for ( const to of egress_list) {
-            expect(getEgressList(to)).toBe("")
+        for (const to of egress_list) {
+            expect(getEgressList(to)).toBe('')
         }
     })
 
     test('transfer::error - fake eosio.token WRAM', async () => {
-        const action = contracts.fake.token.actions.transfer([alice, wram_contract, `1000 ${RAM_SYMBOL}`, '']).send(alice)
+        const action = contracts.fake.token.actions
+            .transfer([alice, wram_contract, `1000 ${RAM_SYMBOL}`, ''])
+            .send(alice)
         await expectToThrow(action, 'eosio_assert_message: only eosio.wram token transfers are allowed')
     })
 
@@ -327,7 +364,7 @@ describe(wram_contract, () => {
     })
 
     test('transfer::error - fake eosio system RAM bytes', async () => {
-        const before = getTokenBalance(alice, RAM_SYMBOL);
+        const before = getTokenBalance(alice, RAM_SYMBOL)
         await contracts.fake.system.actions.ramtransfer([alice, wram_contract, 1000, alice]).send(alice)
         const after = getTokenBalance(alice, RAM_SYMBOL)
         expect(after - before).toBe(0)
@@ -349,15 +386,123 @@ describe(wram_contract, () => {
     })
 
     test('transfer::error - cannot transfer to self', async () => {
-        const action = contracts.wram.actions.transfer([wram_contract, wram_contract, `0 ${RAM_SYMBOL}`, '']).send(wram_contract)
+        const action = contracts.wram.actions
+            .transfer([wram_contract, wram_contract, `0 ${RAM_SYMBOL}`, ''])
+            .send(wram_contract)
         await expectToThrow(action, 'eosio_assert: cannot transfer to self')
     })
 
     test('issue::error - must be executed by contract', async () => {
-        const action_issue = contracts.wram.actions.issue([wram_contract, `10000 ${RAM_SYMBOL}`, '']).send(wram_contract)
+        const action_issue = contracts.wram.actions
+            .issue([wram_contract, `10000 ${RAM_SYMBOL}`, ''])
+            .send(wram_contract)
         await expectToThrow(action_issue, 'eosio_assert: must be executed by contract')
 
         const action_retire = contracts.wram.actions.retire([`10000 ${RAM_SYMBOL}`, '']).send(wram_contract)
         await expectToThrow(action_retire, 'eosio_assert: must be executed by contract')
+    })
+
+    test('cfg::error', async () => {
+        await expectToThrow(
+            contracts.wram.actions.cfg([false, true]).send(bob),
+            'missing required authority eosio.wram'
+        )
+    })
+
+    test('wrapram::disabled - only limited to converting from ram to wram', async () => {
+        await contracts.wram.actions.cfg([false, true]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: false,
+            unwrap_ram_enabled: true,
+        })
+
+        await expectToThrow(
+            contracts.system.actions.ramtransfer([alice, wram_contract, 1000, '']).send(),
+            'eosio_assert: wrap ram is currently disabled'
+        )
+
+        await contracts.system.actions.buyrambytes([alice, wram_contract, 1000]).send()
+        await contracts.wram.actions.unwrap([alice, 1000]).send(alice)
+    })
+
+    test('wrapram::enabled', async () => {
+        await contracts.wram.actions.cfg([true, true]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: true,
+            unwrap_ram_enabled: true,
+        })
+    })
+
+    test('unwrapram::disabled', async () => {
+        await contracts.system.actions.ramtransfer([alice, wram_contract, 5000, '']).send()
+
+        await contracts.wram.actions.cfg([true, false]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: true,
+            unwrap_ram_enabled: false,
+        })
+
+        await expectToThrow(
+            contracts.wram.actions.unwrap([alice, 500]).send(alice),
+            'eosio_assert: unwrap ram is currently disabled'
+        )
+
+        await expectToThrow(
+            contracts.wram.actions.transfer([alice, wram_contract, `500 ${RAM_SYMBOL}`, '']).send(alice),
+            'eosio_assert: unwrap ram is currently disabled'
+        )
+
+    })
+
+    test('unwrapram::enabled', async () => {
+        await contracts.wram.actions.cfg([true, true]).send()
+        expect(getConfig()).toEqual({
+            wrap_ram_enabled: true,
+            unwrap_ram_enabled: true,
+        })
+    })
+
+    test('migrate::error - missing required authority eosio.wram', async () => {
+        const action = contracts.wram.actions.migrate().send(bob)
+        await expectToThrow(action, 'missing required authority eosio.wram')
+    })
+
+    test('migrate', async () => {
+        const before = {
+            wram_contract: {
+                RAM: getTokenBalance(wram_contract, RAM_SYMBOL),
+                supply: getTokenSupply(RAM_SYMBOL),
+                bytes: getRamBytes(wram_contract),
+            },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+                RAM: getTokenBalance(ram_bank, RAM_SYMBOL),
+            },
+        }
+        await contracts.wram.actions.migrate().send()
+        const after = {
+            wram_contract: {
+                RAM: getTokenBalance(wram_contract, RAM_SYMBOL),
+                supply: getTokenSupply(RAM_SYMBOL),
+                bytes: getRamBytes(wram_contract),
+            },
+            ram_bank: {
+                bytes: getRamBytes(ram_bank),
+                RAM: getTokenBalance(ram_bank, RAM_SYMBOL),
+            },
+        }
+        // bytes
+        expect(after.wram_contract.bytes - before.wram_contract.bytes).toBe(-6600)
+        expect(after.ram_bank.bytes - before.ram_bank.bytes).toBe(6600)
+
+        // RAM
+        const ram_128G = 128 * 1024 * 1024 * 1024
+        expect(after.ram_bank.RAM - before.ram_bank.RAM).toBe(ram_128G)
+        expect(after.wram_contract.RAM - before.wram_contract.RAM).toBe(0)
+        expect(after.wram_contract.supply - before.wram_contract.supply).toBe(ram_128G)
+    })
+
+    test('migrate::error - can only be executed once', async () => {
+        await expectToThrow(contracts.wram.actions.migrate().send(), 'eosio_assert: can only be executed once')
     })
 })
